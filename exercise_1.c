@@ -25,34 +25,48 @@
 /****************************************************/
 void lbm_comm_init_ex1(lbm_comm_t * comm, int total_width, int total_height)
 {
+	int rank;
+	int comm_size;
+	MPI_Comm_rank( MPI_COMM_WORLD, &rank );
+	MPI_Comm_size( MPI_COMM_WORLD, &comm_size );
+
 	//
 	// TODO: calculate the splitting parameters for the current task.
 	//
 	// HINT: You can look in exercise_0.c to get an example for the sequential case.
 	//
-
+	if (total_width % comm_size != 0) {
+		fatal("Total width not dividable by comm_size !");
+	}
+	
 	// TODO: calculate the number of tasks along X axis and Y axis.
-	comm->nb_x = -1;
-	comm->nb_y = -1;
+	comm->nb_x = comm_size;
+	comm->nb_y = 1;
 
 	// TODO: calculate the current task position in the splitting
-	comm->rank_x = -1;
-	comm->rank_y = -1;
+	comm->rank_x = rank;
+	comm->rank_y = 0;
 
 	// TODO : calculate the local sub-domain size (do not forget the 
 	//        ghost cells). Use total_width & total_height as starting 
 	//        point.
-	comm->width = -1;
-	comm->height = -1;
+	comm->width = (total_width / comm_size) + 2;
+	comm->height = total_height + 2;
 
 	// TODO : calculate the absolute position in the global mesh.
 	//        without accounting the ghost cells
 	//        (used to setup the obstable & initial conditions).
-	comm->x = -1;
-	comm->y = -1;
+	comm->x = comm->rank_x * (total_width / comm_size);
+	comm->y = 0;
+
+	MPI_Comm newcomm;
+	MPI_Comm_split(comm->communicator, comm->nb_x, 1, &newcomm);
+
+	int newrank;
+	MPI_Comm_rank(newcomm, &newrank);
 
 	//if debug print comm
-	//lbm_comm_print(comm);
+	lbm_comm_print(comm);
 }
 
 /****************************************************/
