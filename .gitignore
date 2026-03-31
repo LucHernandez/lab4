@@ -1,0 +1,11 @@
+**/**.o
+**.o
+objs/**
+objs/
+**.gif
+**.raw
+**/**.gif
+**/**.raw
+display
+check_comm
+lbm
