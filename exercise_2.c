@@ -1,14 +1,14 @@
 /*****************************************************
-    AUTHOR  : Sébastien Valat
-    MAIL    : sebastien.valat@univ-grenoble-alpes.fr
-    LICENSE : BSD
-    YEAR    : 2021
-    COURSE  : Parallel Algorithms and Programming
+	AUTHOR  : Sébastien Valat
+	MAIL    : sebastien.valat@univ-grenoble-alpes.fr
+	LICENSE : BSD
+	YEAR    : 2021
+	COURSE  : Parallel Algorithms and Programming
 *****************************************************/
 
 //////////////////////////////////////////////////////
 //
-// Goal: Implement odd/even 1D blocking communication scheme 
+// Goal: Implement odd/even 1D blocking communication scheme
 //       along X axis.
 //
 // SUMMARY:
@@ -24,14 +24,14 @@
 #include "src/exercises.h"
 
 /****************************************************/
-void lbm_comm_init_ex2(lbm_comm_t * comm, int total_width, int total_height)
+void lbm_comm_init_ex2(lbm_comm_t *comm, int total_width, int total_height)
 {
-	//we use the same implementation then ex1
+	// we use the same implementation then ex1
 	lbm_comm_init_ex1(comm, total_width, total_height);
 }
 
 /****************************************************/
-void lbm_comm_ghost_exchange_ex2(lbm_comm_t * comm, lbm_mesh_t * mesh)
+void lbm_comm_ghost_exchange_ex2(lbm_comm_t *comm, lbm_mesh_t *mesh)
 {
 	//
 	// TODO: Implement the 1D communication with blocking MPI functions using
@@ -42,8 +42,93 @@ void lbm_comm_ghost_exchange_ex2(lbm_comm_t * comm, lbm_mesh_t * mesh)
 	//    - double[9] lbm_mesh_get_cell(mesh, x, y): function to get the address of a particular cell.
 	//    - comm->width : The with of the local sub-domain (containing the ghost cells)
 	//    - comm->height : The height of the local sub-domain (containing the ghost cells)
-	
-	//example to access cell
-	//double * cell = lbm_mesh_get_cell(mesh, local_x, local_y);
-	//double * cell = lbm_mesh_get_cell(mesh, comm->width - 1, 0);
+
+	// example to access cell
+	// double * cell = lbm_mesh_get_cell(mesh, local_x, local_y);
+	// double * cell = lbm_mesh_get_cell(mesh, comm->width - 1, 0);
+
+	// Computing neighbors rank
+	int left_rank = (comm->rank_x > 0) ? comm->rank_x - 1 : MPI_PROC_NULL;
+	int right_rank = (comm->rank_x < comm->nb_x - 1) ? comm->rank_x + 1 : MPI_PROC_NULL;
+
+	// Standardize tag to factorize
+	int tag_to_left = 0;
+	int tag_to_right = 1;
+
+	// Size of a column, accounting the fact that each cell contains DIRECTIONS times doubles
+	int col_size = comm->height * DIRECTIONS;
+
+	// Necessary to allow recv to return informations
+	MPI_Status status;
+
+	// Odd : send first, then receive
+	if (comm->rank_x % 2 != 0)
+	{
+		/* ---------------------------------------------------------------
+		left to right : send from left neighbor | reception in the right neighbor
+		Note : we send from column width-2 as column width - 1 is a ghost one
+			   we receive from column width = 0 as its the left ghost cells column
+		--------------------------------------------------------------- */
+
+		// We send directly the whole column ! It's way more elegant and efficient that using a loop like I first wanted to do
+		MPI_Send(lbm_mesh_get_cell(mesh, comm->width - 2, 0),
+				 col_size, MPI_DOUBLE,
+				 right_rank, tag_to_right,
+				 comm->communicator);
+
+		MPI_Recv(lbm_mesh_get_cell(mesh, 0, 0),
+				 col_size, MPI_DOUBLE,
+				 left_rank, tag_to_right,
+				 comm->communicator, &status);
+
+		/* ---------------------------------------------------------------
+		right to left : send from right neighbor | reception in the left neighbor
+		Note : we send from column 1 as column width = 0 is a ghost one
+			   we receive from column width - 1 as its the right ghost cells column
+		--------------------------------------------------------------- */
+		MPI_Send(lbm_mesh_get_cell(mesh, 1, 0),
+				 col_size, MPI_DOUBLE,
+				 left_rank, tag_to_left,
+				 comm->communicator);
+
+		MPI_Recv(lbm_mesh_get_cell(mesh, comm->width - 1, 0),
+				 col_size, MPI_DOUBLE,
+				 right_rank, tag_to_left,
+				 comm->communicator, &status);
+	}
+	// Even : receive first, then send
+	else
+	{
+		/* ---------------------------------------------------------------
+		left to right : send from left neighbor | reception in the right neighbor
+		Note : we send from column width-2 as column width - 1 is a ghost one
+			   we receive from column width = 0 as its the left ghost cells column
+		--------------------------------------------------------------- */
+
+		// We send directly the whole column ! It's way more elegant and efficient that using a loop like I first wanted to do
+		MPI_Recv(lbm_mesh_get_cell(mesh, 0, 0),
+				 col_size, MPI_DOUBLE,
+				 left_rank, tag_to_right,
+				 comm->communicator, &status);
+
+		MPI_Send(lbm_mesh_get_cell(mesh, comm->width - 2, 0),
+				 col_size, MPI_DOUBLE,
+				 right_rank, tag_to_right,
+				 comm->communicator);
+
+		/* ---------------------------------------------------------------
+		right to left : send from right neighbor | reception in the left neighbor
+		Note : we send from column 1 as column width = 0 is a ghost one
+			   we receive from column width - 1 as its the right ghost cells column
+		--------------------------------------------------------------- */
+		MPI_Recv(lbm_mesh_get_cell(mesh, comm->width - 1, 0),
+				 col_size, MPI_DOUBLE,
+				 right_rank, tag_to_left,
+				 comm->communicator, &status);
+
+		MPI_Send(lbm_mesh_get_cell(mesh, 1, 0),
+				 col_size, MPI_DOUBLE,
+				 left_rank, tag_to_left,
+				 comm->communicator);
+	}
 }
